@@ -1,0 +1,46 @@
+{
+    "name": "tsterker/hopper",
+    "type": "library",
+    "description": "Opinionated RabbitMQ client.",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Tim Sterker",
+            "email": "t.sterker@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^7.4",
+        "markup/rabbitmq-management-api": "^2.1",
+        "php-amqplib/php-amqplib": "^2.11",
+        "ramsey/uuid": "^3.0 || ^4.0",
+        "spatie/enum": "^2.3",
+        "thecodingmachine/safe": "^1.1"
+    },
+    "require-dev": {
+        "mockery/mockery": "^1.4",
+        "phpstan/phpstan": "^0.12.31",
+        "phpstan/phpstan-mockery": "^0.12.5",
+        "phpunit/phpunit": "^9.2"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    },
+    "autoload": {
+        "psr-4": {
+            "TSterker\\Hopper\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "TSterker\\Hopper\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "scripts": {
+        "phpinsights": "docker run -i --rm -v $PWD:/app nunomaduro/phpinsights --ansi"
+    }
+}

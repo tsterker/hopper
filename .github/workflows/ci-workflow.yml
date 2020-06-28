@@ -1,0 +1,38 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    services:
+      rabbitmq:
+        image: rabbitmq:3.8-management
+        env:
+          RABBITMQ_DEFAULT_USER: user
+          RABBITMQ_DEFAULT_PASS: pass
+        ports:
+        - 5672:5672
+        - 15672:15672
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '7.4'
+        extensions: mbstring, intl, sockets
+        coverage: xdebug    
+        tools: composer, prestissimo
+        # tools: phpunit, composer, prestissimo, php-cs-fixer, phpstan
+
+    - run: composer install
+
+    - name: PHPUnit
+      run: ./vendor/bin/phpunit --testdox --colors=always
+
+    - name: PHPStan
+      run: ./vendor/bin/phpstan analyse --no-progress
