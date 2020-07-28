@@ -29,6 +29,9 @@ class Piper
     /** @var callable(int $messageCount, int|float $flushTime): void */
     protected $flushCallback;
 
+    /** @var callable(int|float $time): void */
+    protected $idleCallback;
+
     /**
      * @param Hopper $hopper
      * @param integer $messageBufferSize
@@ -42,6 +45,11 @@ class Piper
         $this->subscriber = (new Subscriber($this->hopper))
             ->withIdleTimeout($idleTimeout)
             ->useIdleHandler(function ($timeout): void {
+
+                if (isset($this->idleCallback)) {
+                    ($this->idleCallback)($timeout);
+                }
+
                 $this->flush();
             });
 
@@ -56,6 +64,17 @@ class Piper
     public function onFlush(callable $flushCallback): self
     {
         $this->flushCallback = $flushCallback;
+
+        return $this;
+    }
+
+    /**
+     * @param callable(int|float $time): void $idleCallback
+     * @return self
+     */
+    public function onIdle(callable $idleCallback): self
+    {
+        $this->idleCallback = $idleCallback;
 
         return $this;
     }
@@ -90,11 +109,6 @@ class Piper
         // $this->registerPublishAckHandler();
 
         $this->subscriber->consume($timeout);
-        $this->flush();
-    }
-
-    protected function onIdle(): void
-    {
         $this->flush();
     }
 
