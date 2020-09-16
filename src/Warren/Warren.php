@@ -3,9 +3,8 @@
 namespace TSterker\Hopper\Warren;
 
 use GuzzleHttp\Exception\ClientException;
-use Markup\RabbitMq\ApiFactory;
-use Markup\RabbitMq\ManagementApi\Api\Queue as QueueApi;
-use Markup\RabbitMq\ManagementApi\Client;
+use TSterker\RabbitMq\ApiFactory;
+use TSterker\RabbitMq\ManagementApi\Client;
 use TSterker\Hopper\Exceptions\NotFoundException;
 use TSterker\Hopper\Warren\Exchange;
 
