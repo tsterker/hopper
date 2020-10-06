@@ -52,7 +52,7 @@ class HopperTest extends TestCase
     }
 
     /** @test */
-    public function it_sets_channel_prefetch_count_by_default()
+    public function it_sets_global_channel_prefetch_count_by_default()
     {
         $channel = Mockery::spy(AMQPChannel::class);
         $amqp = Mockery::spy(AMQPLazyConnection::class);
@@ -64,11 +64,11 @@ class HopperTest extends TestCase
         };
         $hopper->getChannel();
 
-        $channel->shouldHaveReceived('basic_qos')->with(0, 123, false);
+        $channel->shouldHaveReceived('basic_qos')->with(0, 123, true);
     }
 
     /** @test */
-    public function it_allows_changing_channel_prefetch_count()
+    public function it_allows_changing_global_channel_prefetch_count()
     {
         $channel = Mockery::spy(AMQPChannel::class);
         $amqp = Mockery::spy(AMQPLazyConnection::class);
@@ -77,6 +77,19 @@ class HopperTest extends TestCase
         $hopper = new Hopper($amqp);
 
         $hopper->setPrefetchCount(999);
+        $channel->shouldHaveReceived('basic_qos')->with(0, 999, true);
+    }
+
+    /** @test */
+    public function it_allows_using_local_channel_prefetch_count()
+    {
+        $channel = Mockery::spy(AMQPChannel::class);
+        $amqp = Mockery::spy(AMQPLazyConnection::class);
+        $amqp->shouldReceive('channel')->once()->andReturn($channel);
+
+        $hopper = new Hopper($amqp);
+
+        $hopper->setPrefetchCount(999, false);
         $channel->shouldHaveReceived('basic_qos')->with(0, 999, false);
     }
 

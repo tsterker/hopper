@@ -84,14 +84,14 @@ class Hopper
         $this->getChannel()->wait_for_pending_acks($timeout);
     }
 
-    public function setPrefetchCount(int $prefetchCount): self
+    public function setPrefetchCount(int $prefetchCount, bool $global = true): self
     {
         $this->prefetchCount = $prefetchCount;
 
         $this->getChannel()->basic_qos(
             0,                    // prefetchSize: the amount of data that can be pre-fetched in bytes (like prefetchCount but in bytes); zero means "no specific limit"
             $this->prefetchCount, // prefetchCount: the number of messages that the queue will push to this consumer before it waits for acknowledgements
-            false                  // global: 'false' means the setting applies per (new) consumer in the channel (existing ones are not affected), true means the setting is per channel (the prefetch size would be shared among consumers)
+            $global               // global: 'false' means the setting applies per (new) consumer in the channel (existing ones are not affected), true means the setting is per channel (the prefetch size would be shared among consumers)
         );
 
         return $this;
