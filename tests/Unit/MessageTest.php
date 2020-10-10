@@ -104,7 +104,7 @@ class MessageTest extends TestCase
     }
 
     /** @test */
-    public function it_can_be_ACKed_if_channel_is_set()
+    public function it_can_be_ACKed()
     {
         $amqpMsg = Mockery::mock(AMQPMessage::class, ['getDeliveryTag' => 123]);
         $channel = Mockery::spy(AMQPChannel::class);
@@ -116,23 +116,7 @@ class MessageTest extends TestCase
     }
 
     /** @test */
-    public function it_can_be_NACKed_and_requeued_if_channel_is_set()
-    {
-        $amqpMsg = Mockery::mock(AMQPMessage::class, ['getDeliveryTag' => 123]);
-        $channel = Mockery::spy(AMQPChannel::class);
-        $msg = new Message($amqpMsg);
-
-        $msg->setChannel($channel);
-        $msg->nack();
-        $channel->shouldHaveReceived('basic_nack')->with(
-            123,
-            false,  // multiple
-            true   // requeue
-        );
-    }
-
-    /** @test */
-    public function it_can_ACK_multiple_if_channel_is_set()
+    public function it_can_ACK_multiple()
     {
         $amqpMsg = Mockery::mock(AMQPMessage::class, ['getDeliveryTag' => 123]);
         $channel = Mockery::spy(AMQPChannel::class);
@@ -148,7 +132,23 @@ class MessageTest extends TestCase
     }
 
     /** @test */
-    public function it_can_NACK_and_requeue_multiple_if_channel_is_set()
+    public function it_can_be_NACKed_and_requeued()
+    {
+        $amqpMsg = Mockery::mock(AMQPMessage::class, ['getDeliveryTag' => 123]);
+        $channel = Mockery::spy(AMQPChannel::class);
+        $msg = new Message($amqpMsg);
+
+        $msg->setChannel($channel);
+        $msg->nack();
+        $channel->shouldHaveReceived('basic_nack')->with(
+            123,
+            false,  // multiple
+            true   // requeue
+        );
+    }
+
+    /** @test */
+    public function it_can_NACK_and_requeue_multiple()
     {
         $amqpMsg = Mockery::mock(AMQPMessage::class, ['getDeliveryTag' => 123]);
         $channel = Mockery::spy(AMQPChannel::class);
@@ -161,6 +161,22 @@ class MessageTest extends TestCase
             123,
             true,  // multiple
             true   // requeue
+        );
+    }
+
+    /** @test */
+    public function it_can_be_NACKed_and_not_requeued()
+    {
+        $amqpMsg = Mockery::mock(AMQPMessage::class, ['getDeliveryTag' => 123]);
+        $channel = Mockery::spy(AMQPChannel::class);
+        $msg = new Message($amqpMsg);
+
+        $msg->setChannel($channel);
+        $msg->ignore();
+        $channel->shouldHaveReceived('basic_nack')->with(
+            123,
+            false,  // multiple
+            false   // requeue
         );
     }
 

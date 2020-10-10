@@ -17,7 +17,8 @@ interface Transformer
      * TODO: Prevent transformer to "accidentally" ACK messages?
      *
      * @param Message $msg Inoming message that should be confirmed once outgoing message publish was confirmed
-     * @return Message Outgoing message to publish and (on success) will cause incoming message to be ACKed
+     * @return null|Message Outgoing message to publish and (on success) should cause incoming message to be ACKed
+     *                      Return null to indicate the incoming message should be acknowledged & not requeued (i.e. NACK)
      */
-    public function transformMessage(Message $msg): Message;
+    public function transformMessage(Message $msg): ?Message;
 }

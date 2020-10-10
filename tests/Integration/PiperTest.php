@@ -64,6 +64,50 @@ class PiperTest extends TestCase
         $this->assertCount(5, $transformer->messages);
         $this->assertEquals(2, $flushCallback->flushCount);
     }
+
+    /** @test */
+    public function test_if_transformer_does_not_return_out_message_directly_NACK_in_message_without_requeue()
+    {
+        $sourceQueue = $this->hopper->createQueue('source');
+        $destQueue = $this->hopper->createQueue('dest');
+        $this->hopper->declareQueue($sourceQueue);
+        $this->hopper->declareQueue($destQueue);
+
+        $piper = new Piper(
+            $this->hopper,
+            999,  // buffer
+            0  // idle timeout (0 means no idle timeout)
+        );
+
+        // We'll keep track of flushes to ensure nothing was flushed
+        $flushCallback = new TestFlushCallback;
+        $piper->onFlush($flushCallback);
+
+        $this->assertCount(0, $this->warren->getQueueMessages('source'));
+        $this->assertCount(0, $this->warren->getQueueMessages('dest'));
+
+        // Publish 5 messages
+        $this->hopper->publish($sourceQueue, Message::make(['i' => '1']));
+        $this->hopper->publish($sourceQueue, Message::make(['i' => '2']));
+        $this->hopper->publish($sourceQueue, Message::make(['i' => '3']));
+        $this->hopper->publish($sourceQueue, Message::make(['i' => '4']));
+        $this->hopper->publish($sourceQueue, Message::make(['i' => '5']));
+
+        // Add tranformer & consume messages
+        $transformer = new TestMessageTransformerWithoutReturnedMessage;
+        $piper->add($sourceQueue, $destQueue, $transformer);
+        $piper->consume(0.1);
+        $this->hopper->reconnect();  // <-- Any un-ACKed messages would end up in source queue
+
+        // We expect
+        // - transformer encountered all 5 messages
+        // - no messages to remain in neither source nor dest
+        // - nothing was flushed (as all messages were ignored)
+        $this->assertCount(5, $transformer->messages);
+        $this->assertCount(0, $this->warren->getQueueMessages('source'));
+        $this->assertCount(0, $this->warren->getQueueMessages('dest'));
+        $this->assertEquals(0, $flushCallback->flushCount);
+    }
 }
 
 class TestMessageTransformer implements Transformer
@@ -77,6 +121,18 @@ class TestMessageTransformer implements Transformer
     }
 }
 
+class TestMessageTransformerWithoutReturnedMessage implements Transformer
+{
+    /** @var Message[] */
+    public array $messages = [];
+
+    public function transformMessage(Message $msg): ?Message
+    {
+        $this->messages[$msg->getId()] = $msg;
+
+        return null;
+    }
+}
 
 class TestFlushCallback
 {

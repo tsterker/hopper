@@ -137,13 +137,13 @@ class TestMessage extends Message
     public int $ackCount = 0;
     public int $nackCount = 0;
 
-    public function ack($multiple = false): void
+    public function ack(bool $multiple = false): void
     {
         $this->ackCount++;
         parent::ack($multiple);
     }
 
-    public function nack($multiple = false): void
+    public function nack(bool $multiple = false, bool $requeue = true): void
     {
         $this->nackCount++;
         parent::nack($multiple);

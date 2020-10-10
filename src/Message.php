@@ -102,7 +102,7 @@ class Message
      *                       so that multiple messages can be acknowledged with a single method.
      * @link https://www.rabbitmq.com/amqp-0-9-1-reference.html#basic.ack
      */
-    public function ack($multiple = false): void
+    public function ack(bool $multiple = false): void
     {
         $this->assertUnacked();
         $this->channel->basic_ack($this->getDeliveryTag(), $multiple);  // @phpstan-ignore-line
@@ -110,19 +110,29 @@ class Message
     }
 
     /**
-     * Reject & requeue one or more incoming message(s).
+     * Reject & requeue (default) one or more incoming message(s).
      *
      * @param bool $multiple If true, the delivery tag is treated as "up to and including",
      *                       so that multiple messages can be rejected with a single method.
+     * @param bool $requeue Whether the message should be requeued
      * @link https://www.rabbitmq.com/amqp-0-9-1-reference.html#basic.nack
      */
-    public function nack($multiple = false): void
+    public function nack(bool $multiple = false, bool $requeue = true): void
     {
-        $requeue = true;
-
         $this->assertUnacked();
         $this->channel->basic_nack($this->getDeliveryTag(), $multiple, $requeue);  // @phpstan-ignore-line
         $this->onResponse();
+    }
+
+    /**
+     * NACK & don't requeue one or more incoming message(s).
+     *
+     * @param boolean $multiple
+     * @return void
+     */
+    public function ignore(bool $multiple = false): void
+    {
+        $this->nack($multiple, false);
     }
 
     /**

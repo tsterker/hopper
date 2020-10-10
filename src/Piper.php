@@ -88,12 +88,16 @@ class Piper
 
             $outMsg = $transformer->transformMessage($msg);
 
+            if (!$outMsg) {
+                // Transformer did not return a message, so we directly
+                // NACK & don't requeue the incoming message
+                $msg->ignore();
+                return;
+            }
+
             $this->hopper->addBatchMessage($out, $outMsg);
 
             $this->pendingPublishedMessages[$outMsg->getId()] = $outMsg;
-
-            // echo json_encode($msg->getData()) . " --> " . json_encode($outMsg->getData()) . "\n";
-            // echo $msg->getId() . " --> " . $outMsg->getId() . "\n";
 
             if (count($this->pendingPublishedMessages) >= $this->messageBufferSize) {
                 $this->flush();
@@ -156,9 +160,13 @@ class Piper
     }
 
     /**
-     * Register publish ACK handler that sends batch ACK for last incoming message
-     * once all pending published messages have been confirmed.
-     *
+     * Register publish ACK handler to keep track of pending message publishes (by
+     * removing successfully published messages from $pendingPublishedMessages). This
+     * can then be used in Piper::flush to infer that all messages were successfully
+     * published in case the $pendingPublishedMessages is empty after Hopper::awaitPendingPublishConfirms.
+     * 
+     * In the case of NACK we do nothing (i.e. leave the corresponding message as in
+     * $pendingPublishedMessages).
      *
      * @return void
      */
@@ -169,10 +177,12 @@ class Piper
         });
 
         $this->hopper->onPublishNack(function (Message $outMsg, Hopper $hopper) {
-            echo "NACK!\n";
             // TODO: Handle publish NACK?
             // Here we would need to NACK only the incoming message for which the corresponding out message publish failed.
             // For this we would need to associate each outMsg with an incoming message
+
+            echo "[" . static::class . "] NACK!\n";  // Awful! But just to have *something* show up *somewhere*, out of paranoia?
+
         });
     }
 }
