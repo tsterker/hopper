@@ -95,7 +95,7 @@ class PiperTest extends TestCase
 
 
         $this->markTestSkipped("We are getting a NACK, because the hopper publish ACK handler is not called (we mock it).");
-        $this->assertEquals(1, $bazMsg->nackCount);
+        // $this->assertEquals(1, $bazMsg->nackCount);
 
 
         // $hopper->fakeIncomingMessage($inQueue, $bazMsg);
