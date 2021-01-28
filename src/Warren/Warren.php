@@ -19,10 +19,34 @@ class Warren
 
     protected string $vhost = '/';
 
+    /**
+     * The default connect timeout.
+     *
+     * @var int
+     */
+    const CONNECT_TIMEOUT = 3;
 
-    public function __construct(string $baseUrl = 'http://localhost:15672', string $user = 'user', string $password = 'pass')
+    /**
+     * The default transport timeout.
+     *
+     * @var int
+     */
+    const TIMEOUT = 5;
+
+    /**
+     * @param string $baseUrl
+     * @param string $user
+     * @param string $password
+     * @param mixed[] $guzzleOptions Additional guzzle options to pass on to RabbitMq Management API client
+     */
+    public function __construct(string $baseUrl = 'http://localhost:15672', string $user = 'user', string $password = 'pass', array $guzzleOptions = [])
     {
-        $client = new Client($baseUrl, $user, $password);
+        $config = array_merge([
+            'connect_timeout' => self::CONNECT_TIMEOUT,
+            'timeout' => self::TIMEOUT,
+        ], $guzzleOptions);
+
+        $client = new Client($baseUrl, $user, $password, $config);
         $this->api = new ApiFactory($client);
     }
 

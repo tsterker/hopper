@@ -6,9 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2021-01-28
+
+### Added
+- Support guzzle options for `Warren`
+- Use conservative default timeouts
+
+### Changed
+- Upgrade to `tsterker/rabbitmq-management-api:^2.3` (introduced default timeouts)
+
 ## [0.3.0] - 2020-10-10
 
-## Changed
+### Changed
 - `Transformer` allows returning no message (i.e. to indicate the pipeline stops for a given message)
 - `Piper` deals with no message by transformer by directly responding with NACK & no requeue
 

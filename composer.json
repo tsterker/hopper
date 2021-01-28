@@ -11,7 +11,7 @@
     ],
     "require": {
         "php": "^7.4",
-        "tsterker/rabbitmq-management-api": "^2.2",
+        "tsterker/rabbitmq-management-api": "^2.3",
         "php-amqplib/php-amqplib": "^2.11",
         "ramsey/uuid": "^3.0 || ^4.0",
         "spatie/enum": "^2.3",
