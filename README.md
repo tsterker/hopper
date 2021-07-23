@@ -267,7 +267,8 @@ $connection = AMQPLazyConnection::create_connection(
 ## Development
 
 **Resources:**
-- https://github.com/php-amqplib/php-amqplib/pull/643
+- Docker-compose setup: https://github.com/php-amqplib/php-amqplib/pull/643
+- Connection Recovery: https://github.com/php-amqplib/php-amqplib/blob/master/demo/connection_recovery_consume.php
 
 
 ```sh

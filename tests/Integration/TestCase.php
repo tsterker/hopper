@@ -88,9 +88,21 @@ class TestCase extends \PHPUnit\Framework\TestCase
 
     protected function simulateRabbitMqDown(): void
     {
-        $this->useProxy();
+        if (!isset($this->toxi)) {
+            throw new LogicException("Toxi Proxy not configured/running/created.");
+        }
 
         $this->proxy->setEnabled(false);
+        $this->toxi->update($this->proxy);
+    }
+
+    protected function simulateRabbitMqUp(): void
+    {
+        if (!isset($this->toxi)) {
+            throw new LogicException("Toxi Proxy not configured/running/created.");
+        }
+
+        $this->proxy->setEnabled(true);
         $this->toxi->update($this->proxy);
     }
 

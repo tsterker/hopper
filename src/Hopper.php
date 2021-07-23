@@ -2,9 +2,12 @@
 
 namespace TSterker\Hopper;
 
+use Closure;
 use InvalidArgumentException;
 use PhpAmqpLib\Channel\AMQPChannel;
 use PhpAmqpLib\Connection\AbstractConnection;
+use PhpAmqpLib\Exception\AMQPConnectionClosedException;
+use PhpAmqpLib\Exception\AMQPIOException;
 use PhpAmqpLib\Exception\AMQPTimeoutException;
 use PhpAmqpLib\Exchange\AMQPExchangeType;
 use PhpAmqpLib\Message\AMQPMessage;
@@ -25,6 +28,14 @@ class Hopper
      * @var bool
      */
     protected bool $durable = true;
+
+    /**
+     * Whether Hopper should try to reconnect on connection exceptions
+     * See also: https://github.com/php-amqplib/php-amqplib#connection-recovery
+     *
+     * @var bool
+     */
+    protected bool $reconnectEnabled = false;
 
     /** @var bool Whether to use publisher confirms */
     protected bool $publisherConfirms = true;
@@ -51,6 +62,9 @@ class Hopper
      */
     protected array $publisherConfirmHandlers = [];
 
+    /** @var Closure[] */
+    protected array $beforeReconnectCallbacks = [];
+
     /**
      * Whether to send a heartbeat in case declare(ticks=1) {...} is used.
      *
@@ -64,6 +78,13 @@ class Hopper
     public function __construct(AbstractConnection $amqp)
     {
         $this->amqp = $amqp;
+    }
+
+    public function enableReconnectOnConnectionError(): self
+    {
+        $this->reconnectEnabled = true;
+
+        return $this;
     }
 
     /**
@@ -155,19 +176,42 @@ class Hopper
      */
     public function declareQueue(Queue $queue): self
     {
-        $this->getChannel()->queue_declare(
-            $queue->getQueueName(),
-            false,           // passive     : Whether queue should be created if does not exists or raise an error instead
-            $this->durable,
-            false,           // exclusive   : Whether access should only be allowed by current connection and delete queue when that connection closes
-            false,           // auto-delete : Delete queue when all consumers have finished using it
-            false,           // nowait
-            new AMQPTable([
-                "x-queue-mode" => "lazy"
-            ])
-        );
+        $this->withReconnect(function () use ($queue) {
+            $this->getChannel()->queue_declare(
+                $queue->getQueueName(),
+                false,           // passive     : Whether queue should be created if does not exists or raise an error instead
+                $this->durable,
+                false,           // exclusive   : Whether access should only be allowed by current connection and delete queue when that connection closes
+                false,           // auto-delete : Delete queue when all consumers have finished using it
+                false,           // nowait
+                new AMQPTable([
+                    "x-queue-mode" => "lazy"
+                ])
+            );
+        });
 
         return $this;
+    }
+
+    public function beforeReconnect(Closure $callback): void
+    {
+        $this->beforeReconnectCallbacks[] = $callback;
+    }
+
+    protected function withReconnect(Closure $callback): void
+    {
+        try {
+            $callback();
+        } catch (AMQPIOException | AMQPConnectionClosedException | \RuntimeException | \ErrorException $e) {
+
+            if (!$this->reconnectEnabled) {
+                throw $e;
+            }
+
+            var_dump('CATCH: withReconnect');
+            $this->reconnect();
+            $callback();
+        }
     }
 
     public function bind(Exchange $exchange, Queue $queue): void
@@ -380,6 +424,13 @@ class Hopper
 
     public function reconnect(): void
     {
+        var_dump('reconnect');
+        // var_dump($this->beforeReconnectCallbacks);
+        foreach ($this->beforeReconnectCallbacks as $callback) {
+            var_dump('CALLBACK');
+            $callback();
+        }
+
         $this->closeChannel();
         $this->amqp->reconnect();
     }

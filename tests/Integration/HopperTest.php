@@ -12,6 +12,8 @@ class HopperTest extends TestCase
     /** @test */
     public function it_simulates_rabbitmq_down()
     {
+        $this->useProxy();
+
         $queue = $this->hopper->createQueue('test-queue');
 
         $this->hopper->declareQueue($queue);
@@ -22,6 +24,35 @@ class HopperTest extends TestCase
         $this->expectExceptionMessage('stream_socket_client(): unable to connect');
 
         $this->hopper->declareQueue($queue);
+    }
+
+    /** @test */
+    public function it_recovers_connection_on_queue_declare()
+    {
+        $this->useProxy();
+
+        $this->hopper->enableReconnectOnConnectionError();
+
+
+        $queue = $this->hopper->createQueue('test-queue');
+
+        $this->simulateRabbitMqDown();
+
+        $didAttemptReconnect = false;
+        $this->hopper->beforeReconnect(function () use (&$didAttemptReconnect) {
+            $this->assertFalse($this->warren->hasQueue('test-queue'));
+            $this->simulateRabbitMqUp();
+            $didAttemptReconnect = true;
+        });
+
+        // $this->expectException(AMQPIOException::class);
+        // $this->expectExceptionMessage('stream_socket_client(): unable to connect');
+
+        $this->hopper->declareQueue($queue);
+
+        $this->assertTrue($didAttemptReconnect);
+        $this->assertTrue($this->warren->hasQueue('test-queue'));
+        $this->assertTrue($this->warren->getQueue('test-queue')->hasArgument('x-queue-mode', 'lazy'));
 
         // $exception = null;
         // try {
