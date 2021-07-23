@@ -1,0 +1,11 @@
+{
+  "better-phpunit.xmlConfigFilepath": "phpunit.xml",
+  "better-phpunit.docker.enable": true,
+  "better-phpunit.docker.command": "docker-compose exec php",
+  "better-phpunit.docker.paths": {
+    "/Users/tim.sterker/code/hopper": "/src",
+  },
+  "better-phpunit.phpunitBinary": "./vendor/bin/phpunit",
+  "better-phpunit.suiteSuffix": "/src/${workspaceFolderBasename}",
+  "better-phpunit.commandSuffix": "--stop-on-failure" // don't use --testdox as it "swallows" any error output
+}

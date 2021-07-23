@@ -42,6 +42,7 @@ Some opinions, which might be loosened as the package matures:
 - [5. Troubleshooting](#5-troubleshooting)
   - [5.1. Framing error](#51-framing-error)
 - [6. TODO](#6-todo)
+  - [Development](#development)
 
 # 2. Getting Started
 
@@ -262,3 +263,15 @@ $connection = AMQPLazyConnection::create_connection(
 # 6. TODO
 - Allow more configuration for what types of queues/exchanges to declare
 - ...
+
+## Development
+
+**Resources:**
+- https://github.com/php-amqplib/php-amqplib/pull/643
+
+
+```sh
+docker-compose up -d
+# docker-compose exec php composer install
+docker-compose exec php vendor/bin/phpunit
+```

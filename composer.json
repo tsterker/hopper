@@ -18,6 +18,7 @@
         "thecodingmachine/safe": "^1.1"
     },
     "require-dev": {
+        "ihsw/toxiproxy-php-client": "^2.0",
         "mockery/mockery": "^1.4",
         "phpstan/phpstan": "^0.12.31",
         "phpstan/phpstan-mockery": "^0.12.5",

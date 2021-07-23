@@ -2,6 +2,26 @@ version: "3.4"
 
 services:
 
+  php:
+    build: .
+    volumes:
+      - .:/src
+    working_dir: /src
+    environment:
+      - TEST_RABBITMQ_HOST=rabbitmq
+      - TEST_RABBITMQ_PORT=5672
+      - TEST_RABBITMQ_API_PORT=15672
+      - TEST_RABBITMQ_USER=user
+      - TEST_RABBITMQ_PASS=pass
+      - TOXI_HOST=proxy
+      - TOXI_PORT=8474
+      - TOXI_AMQP_PORT=5673
+
+    depends_on:
+      - rabbitmq
+      - proxy
+    entrypoint: ['tail', '-f', '/dev/null']
+
   rabbitmq:
     image: rabbitmq:3.8-management
     environment:
@@ -10,3 +30,9 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+
+  proxy:
+    image: shopify/toxiproxy
+    ports:
+      - "8474:8474"
+      - "5673:5673"

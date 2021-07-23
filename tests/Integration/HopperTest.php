@@ -2,11 +2,34 @@
 
 namespace TSterker\Hopper\Tests\Integration;
 
+use PhpAmqpLib\Exception\AMQPIOException;
 use TSterker\Hopper\Hopper;
 use TSterker\Hopper\Message;
 
 class HopperTest extends TestCase
 {
+
+    /** @test */
+    public function it_simulates_rabbitmq_down()
+    {
+        $queue = $this->hopper->createQueue('test-queue');
+
+        $this->hopper->declareQueue($queue);
+
+        $this->simulateRabbitMqDown();
+
+        $this->expectException(AMQPIOException::class);
+        $this->expectExceptionMessage('stream_socket_client(): unable to connect');
+
+        $this->hopper->declareQueue($queue);
+
+        // $exception = null;
+        // try {
+        //     $this->hopper->declareQueue($queue);
+        // } catch (AMQPIOException $exception) {
+        //     $this->assertStringContainsString('stream_socket_client(): unable to connect', $exception->getMessage());
+        // }
+    }
 
     /** @test */
     public function test_declare_lazy_queue()

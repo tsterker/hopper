@@ -115,7 +115,7 @@ class Hopper
 
     /**
      * Declare durable FANOUT queue.
-     * 
+     *
      * TODO: Make configurable
      *
      * @param Exchange $exchange
@@ -147,7 +147,7 @@ class Hopper
 
     /**
      * Declare durable, lazy queue in lazy
-     * 
+     *
      * TODO: Make configurable
      *
      * @param Queue $queue
