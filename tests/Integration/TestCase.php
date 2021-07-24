@@ -7,6 +7,7 @@ use Ihsw\Toxiproxy\Toxiproxy;
 use LogicException;
 use PhpAmqpLib\Connection\AMQPLazyConnection;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
+use PHPUnit\Framework\Assert;
 use TSterker\Hopper\Hopper;
 use TSterker\Hopper\Warren\Warren;
 
@@ -20,6 +21,13 @@ class TestCase extends \PHPUnit\Framework\TestCase
 
     /** @var Proxy */
     protected $proxy;
+
+    /**
+     * Keep track of reconnect attempts and provide assertions.
+     *
+     * @var ClosureSpy
+     */
+    protected ClosureSpy $beforeReconnectCallback;
 
     public function setUp(): void
     {
@@ -67,6 +75,15 @@ class TestCase extends \PHPUnit\Framework\TestCase
         return new Warren(HOST . ':' . API_PORT, USER, PASS);
     }
 
+    protected function reconnectOnErrorTest()
+    {
+        $this->useProxy();
+
+        $this->beforeReconnectCallback = new ClosureSpy;
+        $this->hopper->beforeReconnect($this->beforeReconnectCallback);
+        $this->hopper->enableReconnectOnConnectionError();
+    }
+
     protected function useProxy(): void
     {
         if ('' === TOXI_HOST) {
@@ -80,6 +97,7 @@ class TestCase extends \PHPUnit\Framework\TestCase
         $this->toxi = new Toxiproxy("http://" . TOXI_HOST . ":" . TOXI_PORT);
         $this->proxy = $this->createProxy();
 
+        unset($this->hopper);
         $this->hopper = $this->getHopper(
             $this->proxy->getListenIp(),
             (string) $this->proxy->getListenPort(),
@@ -88,9 +106,7 @@ class TestCase extends \PHPUnit\Framework\TestCase
 
     protected function simulateRabbitMqDown(): void
     {
-        if (!isset($this->toxi)) {
-            throw new LogicException("Toxi Proxy not configured/running/created.");
-        }
+        $this->ensureProxyUsed();
 
         $this->proxy->setEnabled(false);
         $this->toxi->update($this->proxy);
@@ -98,12 +114,39 @@ class TestCase extends \PHPUnit\Framework\TestCase
 
     protected function simulateRabbitMqUp(): void
     {
-        if (!isset($this->toxi)) {
-            throw new LogicException("Toxi Proxy not configured/running/created.");
-        }
+        $this->ensureProxyUsed();
 
         $this->proxy->setEnabled(true);
         $this->toxi->update($this->proxy);
+    }
+
+
+    protected function simulateRabbitMqDownForNextRequest(): void
+    {
+        $this->simulateRabbitMqDown();
+
+        $this->hopper->beforeReconnect(function () {
+            $this->simulateRabbitMqUp();
+        });
+    }
+
+    protected function assertRabbitMqReconnected()
+    {
+        $this->ensureProxyUsed();
+
+        if (!isset($this->beforeReconnectCallback)) {
+            throw new LogicException("No reconnect callback registered. Do you need to first call self::reconnectOnErrorTest?");
+        }
+
+        $this->beforeReconnectCallback->assertCalled();
+        $this->beforeReconnectCallback->reset();
+    }
+
+    protected function ensureProxyUsed(): void
+    {
+        if (!isset($this->toxi)) {
+            throw new LogicException("Toxi Proxy not configured/running/created.");
+        }
     }
 
     protected function createProxy(string $name = 'toxi'): Proxy
@@ -141,5 +184,52 @@ class TestCase extends \PHPUnit\Framework\TestCase
         }
 
         return PORT;
+    }
+
+    protected function assertMessageCount(string $queueName, int $count)
+    {
+        $this->assertCount($count, $this->warren->getQueueMessages($queueName));
+    }
+
+    /**
+     * @param string $queueName
+     * @param mixed[] $messageBody
+     * @return void
+     */
+    protected function assertQueueHas(string $queueName, array $messageBody): void
+    {
+        $serializedMessageBody = json_encode($messageBody);
+
+        foreach ($this->warren->getQueueMessages($queueName) as $msg) {
+            if ($serializedMessageBody == $msg->getBody()) {
+                return;
+            }
+        }
+
+        $this->fail("Queue [$queueName] does not have message: $serializedMessageBody");
+    }
+}
+class ClosureSpy
+{
+    protected int $callCount = 0;
+
+    public function __invoke(): void
+    {
+        $this->callCount++;
+    }
+
+    public function assertCalled()
+    {
+        Assert::assertGreaterThanOrEqual(1, $this->callCount, "Expected callback to be called at least once.");
+    }
+
+    public function reset()
+    {
+        $this->callCount = 0;
+    }
+
+    public function assertCalledTimes(int $count)
+    {
+        Assert::assertEquals($count, $this->callCount, "Expected callback to be called exactly $count times, but was called {$this->callCount}.");
     }
 }

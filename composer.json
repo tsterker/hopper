@@ -35,6 +35,7 @@
         }
     },
     "autoload-dev": {
+        "files": ["util/helpers.php"],
         "psr-4": {
             "TSterker\\Hopper\\Tests\\": "tests/"
         }

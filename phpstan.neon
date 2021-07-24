@@ -5,6 +5,7 @@ parameters:
     level: 8
     bootstrapFiles:
         - tests/config.php
+        - util/helpers.php
     paths:
         - src
         - tests

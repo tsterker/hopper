@@ -2,7 +2,6 @@
 
 namespace TSterker\Hopper;
 
-use Closure;
 use InvalidArgumentException;
 use PhpAmqpLib\Channel\AMQPChannel;
 use PhpAmqpLib\Connection\AbstractConnection;
@@ -13,6 +12,7 @@ use PhpAmqpLib\Exchange\AMQPExchangeType;
 use PhpAmqpLib\Message\AMQPMessage;
 use PhpAmqpLib\Wire\AMQPTable;
 use Throwable;
+use TSterker\Hopper\RetryableChannel;
 
 class Hopper
 {
@@ -62,8 +62,11 @@ class Hopper
      */
     protected array $publisherConfirmHandlers = [];
 
-    /** @var Closure[] */
+    /** @var callable[] */
     protected array $beforeReconnectCallbacks = [];
+
+    /** @var callable[] */
+    protected array $afterReconnectCallbacks = [];
 
     /**
      * Whether to send a heartbeat in case declare(ticks=1) {...} is used.
@@ -102,7 +105,8 @@ class Hopper
      */
     public function awaitPendingPublishConfirms(int $timeout = 0): void
     {
-        $this->getChannel()->wait_for_pending_acks($timeout);
+        // $this->getChannel()->wait_for_pending_acks($timeout);
+        $this->getRetryableChannel()->wait_for_pending_acks($timeout);
     }
 
     public function setPrefetchCount(int $prefetchCount, bool $global = true): self
@@ -144,7 +148,7 @@ class Hopper
      */
     public function declareExchange(Exchange $exchange): self
     {
-        $this->getChannel()->exchange_declare(
+        $this->getRetryableChannel()->exchange_declare(
             $exchange->getExchangeName(),
             AMQPExchangeType::FANOUT,
             false,                      // passive     : Whether exchange should be created if does not exists or raise an error instead
@@ -153,6 +157,15 @@ class Hopper
         );
 
         return $this;
+    }
+
+    public function ensureExchange(string $name): Exchange
+    {
+        $exchange = $this->createExchange($name);
+
+        $this->declareExchange($exchange);
+
+        return $exchange;
     }
 
     /**
@@ -176,47 +189,63 @@ class Hopper
      */
     public function declareQueue(Queue $queue): self
     {
-        $this->withReconnect(function () use ($queue) {
-            $this->getChannel()->queue_declare(
-                $queue->getQueueName(),
-                false,           // passive     : Whether queue should be created if does not exists or raise an error instead
-                $this->durable,
-                false,           // exclusive   : Whether access should only be allowed by current connection and delete queue when that connection closes
-                false,           // auto-delete : Delete queue when all consumers have finished using it
-                false,           // nowait
-                new AMQPTable([
-                    "x-queue-mode" => "lazy"
-                ])
-            );
-        });
+        $this->getRetryableChannel()->queue_declare(
+            $queue->getQueueName(),
+            false,           // passive     : Whether queue should be created if does not exists or raise an error instead
+            $this->durable,
+            false,           // exclusive   : Whether access should only be allowed by current connection and delete queue when that connection closes
+            false,           // auto-delete : Delete queue when all consumers have finished using it
+            false,           // nowait
+            new AMQPTable([
+                "x-queue-mode" => "lazy"
+            ])
+        );
 
         return $this;
     }
 
-    public function beforeReconnect(Closure $callback): void
+    public function ensureQueue(string $name): Queue
+    {
+        $queue = $this->createQueue($name);
+
+        $this->declareQueue($queue);
+
+        return $queue;
+    }
+
+    public function beforeReconnect(callable $callback): void
     {
         $this->beforeReconnectCallbacks[] = $callback;
     }
 
-    protected function withReconnect(Closure $callback): void
+    public function afterReconnect(callable $callback): void
     {
-        try {
-            $callback();
-        } catch (AMQPIOException | AMQPConnectionClosedException | \RuntimeException | \ErrorException $e) {
-
-            if (!$this->reconnectEnabled) {
-                throw $e;
-            }
-
-            var_dump('CATCH: withReconnect');
-            $this->reconnect();
-            $callback();
-        }
+        $this->afterReconnectCallbacks[] = $callback;
     }
 
     public function bind(Exchange $exchange, Queue $queue): void
     {
-        $this->getChannel()->queue_bind($queue->getQueueName(), $exchange->getExchangeName());
+        $this->getRetryableChannel()->queue_bind($queue->getQueueName(), $exchange->getExchangeName());
+    }
+
+    /**
+     * Convenience method to declare & bind a queue to an exchange and retrieve the queue/exchange instances.
+     *
+     * @param string $exchangeName
+     * @param string $queueName
+     * @return array{Exchange, Queue}
+     */
+    public function ensureExchangeQueueBinding(string $exchangeName, string $queueName): array
+    {
+        $exchange = $this->createExchange($exchangeName);
+        $queue = $this->createQueue($queueName);
+
+        $this->declareQueue($queue);
+        $this->declareExchange($exchange);
+
+        $this->bind($exchange, $queue);
+
+        return [$exchange, $queue];
     }
 
     public function onPublishAck(callable $callback): void
@@ -283,7 +312,8 @@ class Hopper
      */
     public function subscribe(Queue $queue, callable $callback): void
     {
-        $this->getChannel()->basic_consume(
+        // $this->getChannel()->basic_consume(
+        $this->getRetryableChannel()->basic_consume(
             $queue->getQueueName(),
             '',     // consumer-tag
             false,  // no-local: If set, server will not send messages to the connection that published them
@@ -326,6 +356,7 @@ class Hopper
             while ($this->getChannel()->is_consuming()) {
                 $start = microtime(true);
 
+                // $this->getRetryableChannel()->wait(null, false, $timeout);
                 $this->getChannel()->wait(null, false, $timeout);
 
                 if ($timeout <= 0) {
@@ -402,14 +433,14 @@ class Hopper
         $method = $batch ? 'batch_basic_publish' : 'basic_publish';
 
         if ($dest instanceof Exchange) {
-            $this->getChannel()->{$method}(
+            $this->getRetryableChannel()->{$method}(
                 $msg->getAmqpMessage(),
                 $dest->getExchangeName(),
                 '',  // routing key
                 false  // mandatory?
             );
         } else if ($dest instanceof Queue) {
-            $this->getChannel()->{$method}(
+            $this->getRetryableChannel()->{$method}(
                 $msg->getAmqpMessage(),
                 '',
                 $dest->getQueueName(),
@@ -425,14 +456,16 @@ class Hopper
     public function reconnect(): void
     {
         var_dump('reconnect');
-        // var_dump($this->beforeReconnectCallbacks);
         foreach ($this->beforeReconnectCallbacks as $callback) {
-            var_dump('CALLBACK');
             $callback();
         }
 
         $this->closeChannel();
         $this->amqp->reconnect();
+
+        foreach ($this->afterReconnectCallbacks as $callback) {
+            $callback();
+        }
     }
 
     public function getChannel(): AMQPChannel
@@ -451,6 +484,11 @@ class Hopper
         $this->setPrefetchCount($this->prefetchCount);
 
         return $this->channel;
+    }
+
+    public function getRetryableChannel(): RetryableChannel
+    {
+        return new RetryableChannel($this, $this->reconnectEnabled);
     }
 
     protected function registerPublishConfirmHandler(Message $msg, Signal $signal, callable $callback): void
