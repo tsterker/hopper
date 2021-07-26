@@ -19,7 +19,7 @@ class RetryableChannel
     protected Hopper $hopper;
     protected bool $doRetry;
 
-    public function __construct(Hopper $hopper, $doRetry = true)
+    public function __construct(Hopper $hopper, bool $doRetry = true)
     {
         $this->hopper = $hopper;
         $this->doRetry = $doRetry;
@@ -32,6 +32,8 @@ class RetryableChannel
      */
     public function __call(string $method, array $args)
     {
+        debug("RetryableChannel:__call:$method");
+
         return $this->withReconnect(function () use ($method,  $args) {
             return $this->hopper->getChannel()->$method(...$args);
         });
@@ -44,11 +46,17 @@ class RetryableChannel
     protected function withReconnect(Closure $callback)
     {
         try {
-            debug('attempt...');
+            debug('RetryableChannel:attempt');
+            debug('RetryableChannel:attempt:callbacks:' . count($this->hopper->getChannel()->callbacks));
+
+            $consumerCallbacks = $this->hopper->getChannel()->callbacks;
+            // $connection = $this->hopper->getConnection();
+            // $channel = $this->hopper->getChannel();
+
             return $callback();
         } catch (AMQPIOException | AMQPConnectionClosedException | RuntimeException | ErrorException $e) {
 
-            debug(get_class($e) . ': ' . $e->getMessage());
+            debug('RetryableChannel:' . get_class($e) . ': ' . $e->getMessage());
 
             if (!$this->doRetry) {
                 throw $e;
@@ -57,9 +65,13 @@ class RetryableChannel
             // TODO: Delay?
             usleep(200 * 1000);
 
-            debug('reconnect & re-attempt...');
+            debug('RetryableChannel:reconnect & re-attempt...');
 
             $this->hopper->reconnect();
+
+            $this->hopper->getChannel()->callbacks = $consumerCallbacks;
+            // $this->hopper->getConnection()->channels[] = $channel;
+            debug('RetryableChannel:callbacks:AFTER:' . count($this->hopper->getChannel()->callbacks));
 
             return $callback();
         }

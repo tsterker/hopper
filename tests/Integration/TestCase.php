@@ -213,6 +213,13 @@ class ClosureSpy
 {
     protected int $callCount = 0;
 
+    protected int $id;
+
+    public function __construct()
+    {
+        $this->id = rand(0, 1000);
+    }
+
     public function __invoke(): void
     {
         $this->callCount++;

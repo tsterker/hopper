@@ -21,7 +21,7 @@ class HopperTest extends TestCase
 
     /**
      * Create Hopper instance that uses a channel spy.
-     * 
+     *
      * The channel spy can be obtained and asserted against by getting it via $hopper->getChannel()
      *
      * @return TestHopper
@@ -58,7 +58,7 @@ class HopperTest extends TestCase
         $amqp = Mockery::spy(AMQPLazyConnection::class);
         $amqp->shouldReceive('channel')->once()->andReturn($channel);
 
-        $hopper = new class ($amqp) extends Hopper
+        $hopper = new class($amqp) extends Hopper
         {
             protected int $prefetchCount = 123;
         };
@@ -564,11 +564,11 @@ class HopperTest extends TestCase
 
     /**
      * @test
-     * 
+     *
      * NOTE: This test is a very contrived way to confirm the heartbeat on tick feature
      *       and it should rather done somehow by a proper integration test with actual
      *       rabbitmq running and a consumer that takes some time.
-     * 
+     *
      */
     public function it_sends_heartbeats_on_tick_if_ticks_are_declared()
     {

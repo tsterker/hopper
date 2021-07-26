@@ -228,10 +228,15 @@ class HopperTest extends TestCase
     }
 
     /** @test */
+    public function test_reproduce_fullcheck_scenario()
+    {
+        $this->assertTrue(false);
+    }
+
+
+    /** @test */
     public function test_subscribe_to_queue_and_consume_messages_with_reconnect()
     {
-        $this->markTestSkipped("Not implemented / Running in infinite consume loop.");
-
         $this->reconnectOnErrorTest();
 
         // Arrange
@@ -240,26 +245,38 @@ class HopperTest extends TestCase
         // Act & Assert reconnect: Subscribe
         $handler = new TestMessageHandler;
 
+
+        // TODO: subscribe/basic_consume must be handled more complex!
+        // essentially we would need to store all parameters and then re-run basic_consume for all stored consumers if anything fails
+        // Maybe it is easier to just have the logic in the application code
+
+        // BTW: If we get a AMQPConnectionClosedException, it seems that the channel unsets itself from the connection
+        // ...this means all information stored on the channel will be gone by that point in time.
+        // ...this means it might make no sense whatsoever to recover any connection without explicitly dealing with re-building the whole pub/sub topolog
+        // ...this means we should just add a try catch in a while loop on the fringes of the application (i.e. in the checker/reporter command?)
+
         $this->simulateRabbitMqDownForNextRequest();
         $this->hopper->subscribe($queue, $handler);
         $this->assertRabbitMqReconnected();
 
+        // TODO: Publish & subscribe on same channel might be causing issues
+        // with reconnecting. For some reason, the $handler does not receive any published messages
+
         // Act: Publish
+        $this->simulateRabbitMqDownForNextRequest();
         $this->hopper->publish($queue, Message::make(['foo' => 'bar']));
+        $this->assertRabbitMqReconnected();
+
+        // Ensure message is successfully published, before continuing
+        // NOTE: does not support retry/reconnect logic (see Hopper::awaitPendingPublishConfirms for more details)
+        $this->hopper->awaitPendingPublishConfirms(2);
+
 
         // Act: Consume
         $this->assertCount(0, $handler->messages);
 
         $this->simulateRabbitMqDownForNextRequest();
-
-
-        while (count($handler->messages) < 1) {
-            usleep(200 * 1000);
-            debug('loop');
-            $this->hopper->consume(1);
-        }
-
-        // $this->assertCount(1, $handler->messages);
+        $this->hopper->consume(0.1);
 
         // Assert
         $this->assertRabbitMqReconnected();
@@ -317,6 +334,35 @@ class HopperTest extends TestCase
         $this->assertCount(1, $ackHandler->messages);
         $this->assertEquals($msg, $ackHandler->messages[0]);
     }
+
+    // TODO: Not sure if we should implement this logic, as it will not work as expected if we reconnect after connection errors
+    // /** @test */
+    // public function it_retains_consumer_callbacks_during_reconnect()
+    // {
+    //     // Arrange
+    //     $consumerCallback = new ClosureSpy;
+    //     $oldChannel = $this->hopper->getChannel();
+    //     $this->hopper->ensureQueue('foo');
+
+    //     // Add consumer callback
+    //     $consumerTag = $oldChannel->basic_consume('foo', '', false, false, false, false, $consumerCallback);
+
+    //     // SANITY: Channel has expected consumer callback
+    //     $this->assertEquals([$consumerTag => $consumerCallback], $this->hopper->getChannel()->callbacks);
+
+    //     // Act: Reconnect
+    //     $this->hopper->reconnect();
+
+    //     // Confirm we got a different channel
+    //     $newChannel = $this->hopper->getChannel();
+    //     $this->assertNotSame($oldChannel, $newChannel);
+
+    //     // Confirm we still have the came callback
+    //     $this->assertEquals(
+    //         [$consumerCallback],
+    //         array_values($this->hopper->getChannel()->callbacks)
+    //     );
+    // }
 }
 
 

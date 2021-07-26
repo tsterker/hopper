@@ -83,6 +83,11 @@ class Hopper
         $this->amqp = $amqp;
     }
 
+    public function getConnection(): AbstractConnection
+    {
+        return $this->amqp;
+    }
+
     public function enableReconnectOnConnectionError(): self
     {
         $this->reconnectEnabled = true;
@@ -96,7 +101,14 @@ class Hopper
      * NOTE:
      * In the context of long-running jobs, there is no reason why one would wait for the confirms.
      *
-     * e.g. assume we want to ACK incoming messages only if we receive publisher confirm.
+     * NOTE:
+     * We are not using RetryableChannel, as published messages will be lost when we create a new channel.
+     * This would mean that we would never succeed to await previously sent messages, as they will be
+     * no longer tracked by the new channel; i.e. the new channel will not have any "published messages"
+     * it's tracking and thus no messages to actually wait for.
+     *
+     * Example:
+     * Assume we want to ACK incoming messages only if we receive publisher confirm.
      *    If process closes before ACK is received, channel will be closed and same incoming message will be redelivered
      *    => No message lost ("at least once")
      *
@@ -105,8 +117,7 @@ class Hopper
      */
     public function awaitPendingPublishConfirms(int $timeout = 0): void
     {
-        // $this->getChannel()->wait_for_pending_acks($timeout);
-        $this->getRetryableChannel()->wait_for_pending_acks($timeout);
+        $this->getChannel()->wait_for_pending_acks($timeout);
     }
 
     public function setPrefetchCount(int $prefetchCount, bool $global = true): self
@@ -312,7 +323,6 @@ class Hopper
      */
     public function subscribe(Queue $queue, callable $callback): void
     {
-        // $this->getChannel()->basic_consume(
         $this->getRetryableChannel()->basic_consume(
             $queue->getQueueName(),
             '',     // consumer-tag
@@ -322,6 +332,8 @@ class Hopper
             false,  // no-wait
             function (AMQPMessage $msg) use ($callback) {
                 $callback(
+                    // TODO: Must use retry-able channel & add tests!
+                    // (new Message($msg))->setChannel($this->getChannel()),
                     (new Message($msg))->setChannel($this->getChannel()),
                     $this
                 );
@@ -353,11 +365,14 @@ class Hopper
         $this->heartbeatOnTick && register_tick_function($heartbeatOnTick);
 
         try {
+            debug('Hopper:consume:consuming:PRE:' . print_r($this->getChannel()->is_consuming(), true));
+            var_dump($this->getChannel()->is_consuming());
+
             while ($this->getChannel()->is_consuming()) {
+                debug('Hopper:consume:loop');
                 $start = microtime(true);
 
-                // $this->getRetryableChannel()->wait(null, false, $timeout);
-                $this->getChannel()->wait(null, false, $timeout);
+                $this->getRetryableChannel()->wait(null, false, $timeout);
 
                 if ($timeout <= 0) {
                     continue;
@@ -434,6 +449,7 @@ class Hopper
 
         if ($dest instanceof Exchange) {
             $this->getRetryableChannel()->{$method}(
+                // $this->getChannel()->{$method}(
                 $msg->getAmqpMessage(),
                 $dest->getExchangeName(),
                 '',  // routing key
@@ -441,6 +457,7 @@ class Hopper
             );
         } else if ($dest instanceof Queue) {
             $this->getRetryableChannel()->{$method}(
+                // $this->getChannel()->{$method}(
                 $msg->getAmqpMessage(),
                 '',
                 $dest->getQueueName(),
@@ -460,21 +477,36 @@ class Hopper
             $callback();
         }
 
+        // TODO: See commented out test HopperTest::it_retains_consumer_callbacks_during_reconnect
+        // $consumerCallbacks = $this->getChannel()->callbacks;  // We will retain any consumer callbacks during reconnect
+
+        // $channelId = $this->getChannel()->getChannelId();
+        // $channels = $this->amqp->channels;
+        // dump("CHANNEL COUNT BEFORE: " . count($this->amqp->channels));
+
         $this->closeChannel();
         $this->amqp->reconnect();
+
+        // $this->amqp->channels = $channels;
+        // $this->channel = $this->getChannel($channelId);
+
+        // dump($this->amqp->channels);
+        // dump("CHANNEL COUNT AFTER: " . count($this->amqp->channels));
+
+        // $this->getChannel()->callbacks = $consumerCallbacks;
 
         foreach ($this->afterReconnectCallbacks as $callback) {
             $callback();
         }
     }
 
-    public function getChannel(): AMQPChannel
+    public function getChannel($id = null): AMQPChannel
     {
         if (isset($this->channel)) {
             return $this->channel;
         }
 
-        $this->channel = $this->channel ?? $this->amqp->channel();
+        $this->channel = $this->channel ?? $this->amqp->channel($id);
 
         // Enable publisher confirms when we open the channel for the first time
         if ($this->publisherConfirms) {
